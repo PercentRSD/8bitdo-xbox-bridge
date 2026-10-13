@@ -545,6 +545,12 @@ class GipBridgeService : Service() {
 
         session.readerThread = thread(name = "gip-reader-p$playerIndex") { readLoop(session, connection, epIn, epOut) }
         session.injectorThread = thread(name = "gip-injector-p$playerIndex") { gipInjectLoop(session) }
+                thread(name = "gip-wake-p$playerIndex") {
+            Thread.sleep(300)
+            sendPowerOn(session, connection, epOut)
+            sendPdpInit(session, connection, epOut)
+            sendIdentifyRequest(session, connection, epOut)
+        }
     }
 
     private fun stopGipSession(playerIndex: Int) {
@@ -555,6 +561,7 @@ class GipBridgeService : Service() {
         runCatching { session.connection?.close() }
         runCatching { injector?.closeDevice(playerIndex) }
         sessions[playerIndex] = null
+        
     }
 
     private fun gipInjectLoop(session: GipSession) {
@@ -745,6 +752,11 @@ class GipBridgeService : Service() {
         writePacket(conn, epOut, hdr, payload)
     }
 
+       private fun sendPdpInit(session: GipSession, conn: UsbDeviceConnection, epOut: UsbEndpoint) {
+        writePacket(conn, epOut, GipHeader(GipCommand.LED, GipOption.INTERNAL, session.nextSeq(), 3), byteArrayOf(0x00, 0x01, 0x14))
+        writePacket(conn, epOut, GipHeader(GipCommand.AUTHENTICATE, GipOption.INTERNAL, session.nextSeq(), 2), byteArrayOf(0x01, 0x00))
+        log("Sent PDP init packets (player ${session.playerIndex + 1})")
+    }
     private fun sendPowerOn(session: GipSession, conn: UsbDeviceConnection, epOut: UsbEndpoint) {
         val payload = byteArrayOf(0x00) // GIP_PWR_ON
         val hdr = GipHeader(
